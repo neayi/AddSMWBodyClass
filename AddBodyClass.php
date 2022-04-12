@@ -17,21 +17,22 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+use SMW\ApplicationFactory;
+
 $wgExtensionCredits['parserhook'][] = array(
     'path'           => __FILE__,
-    'name'           => 'AddBodyClass',
-    'author'         => 'Povilas Kanapickas & Will Stott',
+    'name'           => 'AddSMWBodyClass',
+    'author'         => 'Povilas Kanapickas & Will Stott & Bertrand Gorge',
     'descriptionmsg' => 'addbodyclass_desc',
-    'url'            => 'https://github.com/p12tic/AddBodyClass',
+    'url'            => 'https://github.com/neayi/AddSMWBodyClass',
     'version'        => '1.2',
 );
 
 $wgExtensionMessagesFiles['AddBodyClassMagic'] = dirname( __FILE__ ) . '/' . 'AddBodyClass.i18n.magic.php';
 $wgExtensionMessagesFiles['AddBodyClass'] = dirname( __FILE__ ) . '/' . 'AddBodyClass.i18n.php';
 
-$wgHooks['ParserFirstCallInit'][] = 'AddBodyClass::setup';
+$wgHooks['OutputPageParserOutput'][] = 'AddBodyClass::onOutputPageParserOutput';
 $wgHooks['OutputPageBodyAttributes'][] = 'AddBodyClass::add_attrs';
-$wgHooks['OutputPageBeforeHTML'][] = 'AddBodyClass::on_output_before_html';
 
 $wgCategoriesAsBodyClasses = false;
 
@@ -39,37 +40,38 @@ class AddBodyClass {
 
     static protected $classes = '';
 
-    static function setup(&$parser)
+    /**
+     * Gets the property $wgSMWBodyClassesAttribute (please replace spaces with underscore) and store it in the static $class var.
+     */
+    static function onOutputPageParserOutput( OutputPage $out, ParserOutput $parserOutput )
     {
-        $parser->setFunctionHook('addbodyclass', 'AddBodyClass::on_parse');
+        global $wgSMWBodyClassesAttribute;
 
-        return true;
-    }
+        global $wgTitle;
+        $parserData = ApplicationFactory::getInstance()->newParserData(
+            $wgTitle,
+            $parserOutput
+        );
 
-    static function on_parse(&$parser, $param1 = '')
-    {
-        $output = '';
-        if ($param1 !== '') {
-            /* if parser cache is used, the page is parsed only once, so we
-               need to store our data in the cached text */
-            $output = 'ADD_BODY_CLASS_BEGIN '
-                        . htmlspecialchars($param1)
-                        . ' ADD_BODY_CLASS_END';
+        if (empty($wgSMWBodyClassesAttribute))
+        {
+            echo "Please define <code>\$wgSMWBodyClassesAttribute = 'A_un_type_de_page';</code> in LocalSettings.php";
         }
-        return $output;
-    }
 
-    static function on_output_before_html(&$out, &$text)
-    {
-        if (($found = strpos($text, 'ADD_BODY_CLASS_BEGIN')) !== false) {
-            if (preg_match_all("/ADD_BODY_CLASS_BEGIN (.*?) ADD_BODY_CLASS_END/",
-                               $text, $matches, PREG_SET_ORDER)) {
-                foreach ($matches as $m) {
-                    self::$classes .= ' '.$m[1];
-                    $text = str_replace($m[0], "", $text);
-                }
+        $wgSMWBodyClassesAttribute = str_replace(' ', '_', $wgSMWBodyClassesAttribute);
+
+        // Access the SemanticData object
+        $semdata = $parserData->getSemanticData();
+
+        foreach($semdata->getProperties() as $key => $property)
+        {
+            if ($key == $wgSMWBodyClassesAttribute)
+            {
+                $typeDePage = $semdata->getPropertyValues($property);
+                self::$classes .= ' '. str_replace(' ', '-', $typeDePage[0]);
             }
         }
+
         return true;
     }
 
@@ -87,6 +89,7 @@ class AddBodyClass {
                 $bodyAttrs['class'] .= ' cat-' . $safeCategoryName . ' icat-' . strtolower($safeCategoryName);
             }
         }
+
         return true;
     }
 
